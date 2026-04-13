@@ -295,6 +295,96 @@ sudo firewall-cmd --permanent --add-port=1515/tcp
 sudo firewall-cmd --reload
 ```
 
+## Installation Output
+
+After successful installation, the script displays a **comprehensive summary** with all connection details for your custom dashboard:
+
+### What's Displayed After Installation
+
+```
+╔══════════════════════════════════════════════════════════════════════╗
+║              SECEOKNIGHT INSTALLATION COMPLETE!                    ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  SERVICES STATUS                                                    │
+└─────────────────────────────────────────────────────────────────────┘
+  ● Seceoknight Indexer:  active
+  ● Seceoknight Manager:  active
+  ● Seceoknight Filebeat: active
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  SERVER INFORMATION                                                 │
+└─────────────────────────────────────────────────────────────────────┘
+  Server IP:     192.168.1.100
+  Server Host:   https://192.168.1.100
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  CONNECTION ENDPOINTS FOR YOUR CUSTOM DASHBOARD                     │
+└─────────────────────────────────────────────────────────────────────┘
+  OpenSearch API:  https://192.168.1.100:9200
+  Wazuh API:       https://192.168.1.100:55000
+
+╔══════════════════════════════════════════════════════════════════════╗
+║        COPY THESE VALUES TO YOUR CUSTOM DASHBOARD .env FILE          ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+# ═══════════════════════════════════════════════════════════════
+# WAZUH API CONFIGURATION
+# ═══════════════════════════════════════════════════════════════
+WAZUH_HOST=192.168.1.100
+WAZUH_PORT=55000
+WAZUH_USERNAME=wazuh
+WAZUH_PASSWORD=auto-generated-password
+
+# ═══════════════════════════════════════════════════════════════
+# JWT AUTHENTICATION (for dashboard session management)
+# ═══════════════════════════════════════════════════════════════
+JWT_SECRET=auto-generated-secret-key
+
+# ═══════════════════════════════════════════════════════════════
+# OPENSEARCH CONFIGURATION (for alerts and logs)
+# ═══════════════════════════════════════════════════════════════
+OPENSEARCH_HOST=192.168.1.100
+OPENSEARCH_PORT=9200
+OPENSEARCH_USERNAME=admin
+OPENSEARCH_PASSWORD=auto-generated-password
+```
+
+### Configuration Files Location
+
+After installation, find your connection details in:
+- `/var/ossec/api/configuration/dashboard.env` - Environment file format
+- `/var/ossec/api/configuration/dashboard.json` - JSON format
+
+### Copy to Your Dashboard Server
+
+```bash
+scp /var/ossec/api/configuration/dashboard.env user@dashboard-server:/path/to/dashboard/
+```
+
+### Index Information
+
+Your dashboard should query these indices:
+- **Alert Indices**: `wazuh-alerts-4.x-*`
+- **Archive Indices**: `wazuh-archives-4.x-*`
+- **Monitoring**: `.wazuh-*`
+
+## Installation Log
+
+The installation process is logged to:
+- **Log File**: `/var/log/seceoknight-install.log`
+
+View the log:
+```bash
+sudo tail -f /var/log/seceoknight-install.log
+```
+
+Or view the entire log:
+```bash
+sudo cat /var/log/seceoknight-install.log
+```
+
 ## Troubleshooting
 
 ### Services Won't Start
@@ -303,6 +393,13 @@ Check for errors in the logs:
 ```bash
 sudo journalctl -u seceoknight-manager.service -n 50
 sudo journalctl -u seceoknight-indexer.service -n 50
+```
+
+### View Installation Log
+
+If installation fails, check the detailed log:
+```bash
+sudo cat /var/log/seceoknight-install.log
 ```
 
 ### Dashboard Can't Connect
