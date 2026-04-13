@@ -246,15 +246,21 @@ sudo curl -sSL "https://raw.githubusercontent.com/SecureSiem/Seceoknight-Collect
 sudo curl -sSL "https://raw.githubusercontent.com/SecureSiem/Seceoknight-Collector/main/Decoder/local_decoder.xml" \
   -o /var/ossec/etc/decoders/local_decoder.xml
 
-# Set correct permissions
+# Set correct permissions (REQUIRED - exactly as shown)
 sudo chmod 777 /var/ossec/etc/rules/local_rules.xml
 sudo chmod 777 /var/ossec/etc/decoders/local_decoder.xml
-sudo chown seceoknight:seceoknight /var/ossec/etc/rules/local_rules.xml
-sudo chown seceoknight:seceoknight /var/ossec/etc/decoders/local_decoder.xml
+sudo chown wazuh:wazuh /var/ossec/etc/rules/local_rules.xml
+sudo chown wazuh:wazuh /var/ossec/etc/decoders/local_decoder.xml
 
 # Restart manager to apply changes
 sudo systemctl restart seceoknight-manager.service
 ```
+
+**Important Permission Settings:**
+| File | Permissions | Ownership | Purpose |
+|------|-------------|-----------|---------|
+| `local_rules.xml` | `777` (rwxrwxrwx) | `wazuh:wazuh` | Full read/write/execute for all users |
+| `local_decoder.xml` | `777` (rwxrwxrwx) | `wazuh:wazuh` | Full read/write/execute for all users |
 
 ## Network Configuration
 
