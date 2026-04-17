@@ -1,0 +1,206 @@
+<!-- Local rules -->
+
+<!-- Modify it at your will. -->
+<!-- Copyright (C) 2015, Wazuh Inc. -->
+
+<!-- Example -->
+<group name="local,syslog,sshd,">
+
+  <!--
+  Dec 10 01:02:02 host sshd[1234]: Failed none for root from 1.1.1.1 port 1066 ssh2
+  -->
+  <rule id="100001" level="5">
+    <if_sid>5716</if_sid>
+    <srcip>1.1.1.1</srcip>
+    <description>sshd: authentication failed from IP 1.1.1.1.</description>
+    <group>authentication_failed,pci_dss_10.2.4,pci_dss_10.2.5,</group>
+  </rule>
+
+</group>
+
+<!-- Abnormal Destination IP Detection by AbuseIPDB list -->
+<group name="fortigate, syslog, local, sshd">
+ <rule id="101103" level="12">
+   <options>alert_by_email</options>
+   <if_group>fortigate</if_group>
+   <list field="dstip" lookup="address_match_key">etc/lists/abuseipdb_blacklist</list>
+   <description>FortiGate: Destination IP is in the AbuseIPDB blacklist. $(msg)</description>
+   <group>fortigate,local,</group>
+ </rule>
+</group>
+
+
+<!-- Abnormal Source IP Detection by AbuseIPDB list -->
+<group name="fortigate, syslog, local, sshd, authentication_failed, invalid_login">
+ <rule id="101104" level="12">
+   <options>alert_by_email</options>
+   <if_group>fortigate</if_group>
+   <list field="srcip" lookup="address_match_key">etc/lists/abuseipdb_blacklist</list>
+   <description>FortiGate: Source IP is in the AbuseIPDB blacklist. $(msg)</description>
+   <group>fortigate,local,</group>
+ </rule>
+</group>
+
+
+<group name="office365, office365, AzureActiveDirectoryStsLogon">
+  <rule id="101106" level="12">
+    <options>alert_by_email</options>
+    <if_group>office365</if_group>
+    <list field="office365.ClientIP" lookup="address_match_key">etc/lists/abuseipdb_blacklist</list>
+    <description>Office365: Client IP matches AbuseIPDB blacklist. $(office365.UserId) operation $(office365.Operation)</description>
+    <group>office365,AzureActiveDirectoryStsLogon,</group>
+  </rule>
+</group>
+
+<!-- Abnormal Destination IP Detection by AbuseIPDB list -->
+<group name="windows, sysmon, sysmon_event3, abuseipdb">
+  <rule id="101107" level="12">
+    <options>alert_by_email</options>
+    <if_group>sysmon_event3</if_group>
+
+    <list field="win.eventdata.destinationIp" lookup="address_match_key">etc/lists/abuseipdb_blacklist</list>
+
+    <description>Sysmon E3: Destination IP $(win.eventdata.destinationIp):$(win.eventdata.destinationPort) is in AbuseIPDB blacklist. user=$(win.eventdata.user) image=$(win.eventdata.image)</description>
+    <group>sysmon_event3,sysmon,</group>
+  </rule>
+</group>
+
+
+<group name="fortigate,firewall,">
+  <rule id="101105" level="12">
+   <if_sid>5750</if_sid> <!-- FortiGate base traffic rule -->
+   <match>policyid":"27"</match>
+   <description>FortiGate: MaliciousFEED deny policy triggered.</description>
+   <group>fortigate,firewall,maliciousfeed</group>
+  </rule>
+
+</group>
+
+<group name="phishing, email,">
+  <rule id="100100" level="10">
+    <decoded_as>json</decoded_as>
+    <field name="scan_result">urlscan.io</field>
+    <description>Phishing URL detected via URLScan.io in email</description>
+  </rule>
+</group>
+
+<group name="windows, sysmon, sysmon_event1, tor">
+  <rule id="130001" level="12">
+    <if_matched_sid>61603</if_matched_sid>
+    <match>Tor Browser</match>
+    <description>Tor Browser execution detected</description>
+  </rule>
+</group>
+
+<group name="windows-usb-detect,">
+  <rule id="111000" level="12">
+    <if_sid>60227</if_sid>
+    <field name="win.system.eventID">^6416$</field>
+    <match>USBSTOR\\Disk</match>
+    <options>no_full_log</options>
+    <description>Windows: A PNP device $(win.eventdata.deviceDescription) was connected to $(win.system.computer)</description>
+  </rule>
+</group>
+
+<!-- External Drive File Activity Detection -->
+
+<group name="syscheck,">
+  <rule id="100300" level="5">
+    <if_sid>550</if_sid>
+    <field name="file">/home</field>
+    <description>File modified in /home directory.</description>
+  </rule>
+
+  <rule id="100301" level="5">
+    <if_sid>554</if_sid>
+    <field name="file">/home</field>
+    <description>File added to /home directory.</description>
+  </rule>
+<!--
+  <rule id="100302" level="5">
+    <if_sid>550</if_sid>
+    <field name="file" type="pcre2">(?i)C:\\Users.+Downloads</field>
+    <description>File modified in the downloads directory.</description>
+  </rule>
+
+  <rule id="100303" level="5">
+    <if_sid>554</if_sid>
+    <field name="file" type="pcre2">(?i)C:\\Users.+Downloads</field>
+    <description>File added to the downloads directory.</description>
+  </rule>
+-->
+</group>
+
+<group name="yara,">
+  <rule id="108000" level="0">
+    <decoded_as>YARA_decoder</decoded_as>
+    <description>YARA grouping rule</description>
+  </rule>
+  <rule id="108001" level="10">
+    <if_sid>108000</if_sid>
+    <match>wazuh-YARA: INFO - Scan result: </match>
+    <description>File "$(YARA.scanned_file)" is a positive match for YARA rule: $(YARA.rule_name)</description>
+  </rule>
+
+  <rule id="108002" level="5">
+    <if_sid>108000</if_sid>
+    <field name="YARA.file_deleted">\.</field>
+    <description>Active response successfully removed malicious file "$(YARA.file_deleted)"</description>
+  </rule>
+
+  <rule id="108003" level="12">
+    <if_sid>108000</if_sid>
+    <field name="YARA.file_not_deleted">\.</field>
+    <description>Active response unable to delete malicious file "$(YARA.file_not_deleted)"</description>
+  </rule>
+</group>
+
+<group name="seceoknight-enrich,">
+  <rule id="209111" level="10">
+    <decoded_as>SeceoKnight_enrich_decoder</decoded_as>
+    <description>SeceoKnight enrichment for base rule $(enrich.base_rule_id) on agent $(enrich.agent) ip=$(enrich.ip) device=$(enrich.device): $(enrich.seceoknight_response)</description>
+  </rule>
+</group>
+
+<group name="local,malware,">
+ <rule id="100002" level="10">
+  <if_sid>554</if_sid>
+
+  <!-- must be in blacklist -->
+  <list field="md5" lookup="match_key">etc/lists/malware-hashes</list>
+
+  <!-- must NOT be in allowlist -->
+  <list field="md5" lookup="not_match_key">etc/lists/md5-allowlist</list>
+
+  <description>Blacklist MD5 matched (not allowlisted): $(file)</description>
+</rule>
+
+<rule id="100003" level="12">
+ <if_sid>100002</if_sid>
+ <field name="file" type="pcre2">(?i)^[c-z]:\\</field>
+ <description>Potential malware detected: File $(file) matched known malicious hash</description>
+</rule>
+</group>
+
+
+<group name="fim,dlp">
+
+  <rule id="100501" level="12">
+    <if_sid>550</if_sid>
+    <match>salary|confidential|client_data|finance|secret|payroll</match>
+    <description>Sensitive file MODIFIED: $(file)</description>
+  </rule>
+
+  <rule id="100500" level="12">
+    <if_sid>554</if_sid>
+    <match>salary|confidential|client_data|finance|secret|payroll</match>
+    <description>Sensitive file ADDED: $(file)</description>
+  </rule>
+
+  <rule id="100502" level="12">
+    <if_sid>553</if_sid>
+    <match>salary|confidential|client_data|finance|secret|payroll</match>
+    <description>Sensitive file DELETED: $(file)</description>
+  </rule>
+
+</group>
