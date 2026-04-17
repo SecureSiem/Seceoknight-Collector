@@ -39,6 +39,13 @@
    <description>FortiGate: Source IP is in the AbuseIPDB blacklist. $(msg)</description>
    <group>fortigate,local,</group>
  </rule>
+
+  <rule id="100950" level="15">
+  <if_sid>101104</if_sid>
+  <field name="data.action">accept</field>
+  <description>CRITICAL: Blacklisted IP allowed through firewall</description>
+</rule>
+  
 </group>
 
 
