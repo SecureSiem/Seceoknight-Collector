@@ -717,87 +717,91 @@ configure_external_access
 # Start services - Manager first to retrieve JWT
 animate_text "→ Starting Seceoknight services..." "${GREEN}"
 
-# Start manager first with default credentials
+# Start manager first
 systemctl enable seceoknight-manager.service >> "$LOGFILE" 2>&1
 systemctl start seceoknight-manager.service >> "$LOGFILE" 2>&1
-sleep 5
 
-# Update API credentials (must restart manager to apply)
-log_info "Updating API credentials..."
-if /var/ossec/bin/wazuh-keystore -f api -k username -v "wazuh" >> "$LOGFILE" 2>&1; then
-    log_info "API username set successfully"
-else
-    log_warn "Failed to set API username, continuing with default"
-fi
-
-if /var/ossec/bin/wazuh-keystore -f api -k password -v "$API_PASSWORD" >> "$LOGFILE" 2>&1; then
-    log_info "API password set successfully"
-else
-    log_warn "Failed to set API password, continuing with default"
-fi
-
-log_info "API credentials updated, restarting manager to apply changes..."
-
-# Restart manager to apply new API credentials
-systemctl restart seceoknight-manager.service >> "$LOGFILE" 2>&1
-
-# Wait longer for manager to fully start and API to be ready
+# Wait for manager to fully start and API to be ready
 log_info "Waiting for manager API to be ready..."
-sleep 10
+sleep 15
 
 # Test if API is responding before trying to authenticate
 local api_ready=false
 local api_check_attempts=0
-while [ $api_check_attempts -lt 10 ]; do
+while [ $api_check_attempts -lt 15 ]; do
     if curl -k -s "https://127.0.0.1:55000/" > /dev/null 2>&1; then
         api_ready=true
         log_info "API is responding"
         break
     fi
     api_check_attempts=$((api_check_attempts + 1))
-    log_info "API not ready yet, waiting... (attempt $api_check_attempts/10)"
-    sleep 3
+    log_info "API not ready yet, waiting... (attempt $api_check_attempts/15)"
+    sleep 2
 done
 
 if [ "$api_ready" = false ]; then
     log_warn "API did not become ready in expected time, will try anyway"
 fi
 
-# Retrieve JWT secret dynamically via API with NEW password
-JWT_SECRET=$(retrieve_jwt_via_api "wazuh" "$API_PASSWORD" "127.0.0.1" "55000")
+# FIRST: Try to retrieve JWT with DEFAULT credentials (wazuh:wazuh)
+# This is what Wazuh uses by default after installation
+log_info "Attempting JWT retrieval with default credentials (wazuh:wazuh)..."
+JWT_SECRET=$(retrieve_jwt_via_api "wazuh" "wazuh" "127.0.0.1" "55000")
 
-# If JWT retrieval failed, try to get the actual configured password from keystore
-if [ -z "$JWT_SECRET" ] || [ ${#JWT_SECRET} -lt 20 ]; then
-    log_warn "JWT retrieval with new password failed, checking keystore..."
+# If default credentials worked, use them
+if [ -n "$JWT_SECRET" ] && [ ${#JWT_SECRET} -gt 20 ]; then
+    API_PASSWORD="wazuh"
+    log_info "Default credentials (wazuh:wazuh) worked! Using these for dashboard config."
+else
+    # Default credentials failed, try to set new ones via keystore
+    log_warn "Default credentials failed, attempting to set new API credentials..."
     
-    # Try to read the actual password from keystore
-    local actual_password=$(/var/ossec/bin/wazuh-keystore -f api -k password 2>/dev/null | grep -v "INFO" | head -1)
-    log_info "Keystore returned password: ${actual_password:0:5}... (first 5 chars)"
-    
-    if [ -n "$actual_password" ] && [ "$actual_password" != "$API_PASSWORD" ]; then
-        log_info "Found different password in keystore than expected, retrying with that..."
-        JWT_SECRET=$(retrieve_jwt_via_api "wazuh" "$actual_password" "127.0.0.1" "55000")
-        # Update the password variable for dashboard config
-        API_PASSWORD="$actual_password"
+    # Update API credentials (must restart manager to apply)
+    log_info "Updating API credentials via keystore..."
+    if /var/ossec/bin/wazuh-keystore -f api -k username -v "wazuh" >> "$LOGFILE" 2>&1; then
+        log_info "API username set successfully"
     else
-        log_warn "Keystore password matches expected or is empty, trying default credentials..."
-        # Try default Wazuh credentials
-        JWT_SECRET=$(retrieve_jwt_via_api "wazuh" "wazuh" "127.0.0.1" "55000")
-        if [ -n "$JWT_SECRET" ] && [ ${#JWT_SECRET} -gt 20 ]; then
-            API_PASSWORD="wazuh"
-            log_info "Default credentials worked!"
+        log_warn "Failed to set API username"
+    fi
+
+    if /var/ossec/bin/wazuh-keystore -f api -k password -v "$API_PASSWORD" >> "$LOGFILE" 2>&1; then
+        log_info "API password set successfully"
+    else
+        log_warn "Failed to set API password"
+    fi
+
+    log_info "Restarting manager to apply new API credentials..."
+    systemctl restart seceoknight-manager.service >> "$LOGFILE" 2>&1
+    sleep 10
+    
+    # Try to retrieve JWT with NEW password
+    log_info "Attempting JWT retrieval with new credentials..."
+    JWT_SECRET=$(retrieve_jwt_via_api "wazuh" "$API_PASSWORD" "127.0.0.1" "55000")
+    
+    # If new credentials failed, try reading actual password from keystore
+    if [ -z "$JWT_SECRET" ] || [ ${#JWT_SECRET} -lt 20 ]; then
+        log_warn "New credentials failed, checking what keystore actually has..."
+        local actual_password=$(/var/ossec/bin/wazuh-keystore -f api -k password 2>/dev/null | grep -v "INFO" | head -1)
+        if [ -n "$actual_password" ] && [ "$actual_password" != "$API_PASSWORD" ]; then
+            log_info "Keystore has different password, trying that..."
+            JWT_SECRET=$(retrieve_jwt_via_api "wazuh" "$actual_password" "127.0.0.1" "55000")
+            if [ -n "$JWT_SECRET" ] && [ ${#JWT_SECRET} -gt 20 ]; then
+                API_PASSWORD="$actual_password"
+            fi
         fi
     fi
 fi
 
-# If still no JWT, try wazuh-wui user which is sometimes the default
+# If still no JWT, try wazuh-wui user as last resort
 if [ -z "$JWT_SECRET" ] || [ ${#JWT_SECRET} -lt 20 ]; then
-    log_warn "Trying wazuh-wui user with default password..."
+    log_warn "Trying wazuh-wui user with default password as last resort..."
     JWT_SECRET=$(retrieve_jwt_via_api "wazuh-wui" "wazuh-wui" "127.0.0.1" "55000")
     if [ -n "$JWT_SECRET" ] && [ ${#JWT_SECRET} -gt 20 ]; then
-        # Update dashboard config with working credentials
         API_PASSWORD="wazuh-wui"
         log_info "wazuh-wui credentials worked!"
+    else
+        log_error "All credential attempts failed. JWT will be generated randomly."
+        JWT_SECRET=$(openssl rand -hex 32)
     fi
 fi
 
