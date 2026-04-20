@@ -646,12 +646,23 @@ log_info "Filebeat remains as standard installation (not renamed)"
 # Fix indexer service configuration (use correct user)
 fix_indexer_service() {
     log_info "Fixing indexer service configuration..."
-    local indexer_service="/usr/lib/systemd/system/seceoknight-indexer.service"
     
-    if [ -f "$indexer_service" ]; then
+    # Find the indexer service file (could be in different locations)
+    local indexer_service=""
+    for path in "/usr/lib/systemd/system/seceoknight-indexer.service" "/etc/systemd/system/seceoknight-indexer.service" "/lib/systemd/system/seceoknight-indexer.service"; do
+        if [ -f "$path" ]; then
+            indexer_service="$path"
+            break
+        fi
+    done
+    
+    if [ -n "$indexer_service" ]; then
+        log_info "Found indexer service at: $indexer_service"
+        
         # Fix User and Group to use wazuh-indexer (the actual binary owner)
-        sed -i 's/User=wazuh$/User=wazuh-indexer/g' "$indexer_service"
-        sed -i 's/Group=wazuh$/Group=wazuh-indexer/g' "$indexer_service"
+        # Use flexible patterns that match with or without trailing content
+        sed -i 's/^User=wazuh\b/User=wazuh-indexer/g' "$indexer_service"
+        sed -i 's/^Group=wazuh\b/Group=wazuh-indexer/g' "$indexer_service"
         
         # Fix WorkingDirectory path
         sed -i 's|/usr/share/seceoknight-indexer|/usr/share/wazuh-indexer|g' "$indexer_service"
@@ -663,7 +674,17 @@ fix_indexer_service() {
         # Fix EnvironmentFile path
         sed -i 's|/etc/default/seceoknight-indexer|/etc/default/wazuh-indexer|g' "$indexer_service"
         
+        # Also fix any remaining wazuh user references in ExecStartPre/ExecStartPost
+        sed -i 's/--user wazuh\b/--user wazuh-indexer/g' "$indexer_service"
+        sed -i 's/--group wazuh\b/--group wazuh-indexer/g' "$indexer_service"
+        
         log_info "Indexer service fixed: User/Group set to wazuh-indexer, paths corrected"
+        
+        # Show the actual changes made
+        log_info "Service file User/Group settings after fix:"
+        grep -E "^(User|Group)=" "$indexer_service" | tee -a "$LOGFILE" || true
+    else
+        log_warn "Could not find seceoknight-indexer.service file"
     fi
 }
 
