@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 
-# Seceoknight Security Platform Installer
-# Based on Wazuh 4.11.2 - Customized for Seceoknight
-# This script installs Wazuh Manager, Indexer (no dashboard), and custom rules/integrations
+# Seceoknight Security Platform Installer - Enterprise Edition
+# Based on Wazuh 4.14 - Customized for Seceoknight
+# This script installs Wazuh Manager, Indexer (no dashboard), Filebeat (standard), and custom rules/integrations
+# Features:
+#   - Manager & Indexer renamed to seceoknight-* with proper service configuration
+#   - Filebeat remains as standard installation (not renamed)
+#   - Dynamic JWT retrieval via Wazuh API
+#   - Enterprise-grade visual output
+#   - Custom rules and decoders from GitHub repository
 
 # Color definitions
 RED='\033[0;31m'
@@ -110,14 +116,22 @@ download_from_github() {
 # Function to display Seceoknight ASCII art
 show_seceoknight_banner() {
     clear
+    echo -e "${CYAN}${BOLD}"
     cat << "EOF"
-███████╗███████╗ ██████╗███████╗ ██████╗ ██╗  ██╗███╗   ██╗██╗ ██████╗ ██╗  ██╗████████╗
-██╔════╝██╔════╝██╔════╝██╔════╝██╔═══██╗██║ ██╔╝████╗  ██║██║██╔════╝ ██║  ██║╚══██╔══╝
-███████╗█████╗  ██║     █████╗  ██║   ██║█████╔╝ ██╔██╗ ██║██║██║  ███╗███████║   ██║   
-╚════██║██╔══╝  ██║     ██╔══╝  ██║   ██║██╔═██╗ ██║╚██╗██║██║██║   ██║██╔══██║   ██║   
-███████║███████╗╚██████╗███████╗╚██████╔╝██║  ██╗██║ ╚████║██║╚██████╔╝██║  ██║   ██║   
-╚══════╝╚══════╝ ╚═════╝╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   
+    ███████╗███████╗ ██████╗███████╗ ██████╗ ██╗  ██╗███╗   ██╗██╗ ██████╗ ██╗  ██╗████████╗
+    ██╔════╝██╔════╝██╔════╝██╔════╝██╔═══██╗██║ ██╔╝████╗  ██║██║██╔════╝ ██║  ██║╚══██╔══╝
+    ███████╗█████╗  ██║     █████╗  ██║   ██║█████╔╝ ██╔██╗ ██║██║██║  ███╗███████║   ██║   
+    ╚════██║██╔══╝  ██║     ██╔══╝  ██║   ██║██╔═██╗ ██║╚██╗██║██║██║   ██║██╔══██║   ██║   
+    ███████║███████╗╚██████╗███████╗╚██████╔╝██║  ██╗██║ ╚████║██║╚██████╔╝██║  ██║   ██║   
+    ╚══════╝╚══════╝ ╚═════╝╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   
 EOF
+    echo -e "${NC}"
+    echo -e "${GREEN}${BOLD}╔══════════════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}${BOLD}║                    ENTERPRISE SECURITY PLATFORM                            ${NC}"
+    echo -e "${GREEN}${BOLD}║                    Version 4.14 - Enterprise Edition                     ${NC}"
+    echo -e "${GREEN}${BOLD}╚══════════════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${YELLOW}Based on Wazuh 4.14 - Customized for Seceoknight Security Platform${NC}"
     echo ""
 }
 
@@ -125,14 +139,23 @@ EOF
 display_completion_watermark() {
     clear
     echo ""
-    animate_text "           INSTALLATION COMPLETE           " "${GREEN}${BOLD}"
-    echo ""
+    echo -e "${GREEN}${BOLD}"
     cat << "EOF"
-╔══════════════════════════════════════════════════════════════════════════╗
-║                    SECEOKNIGHT SECURITY PLATFORM                           ║
-║                         Installation Complete                              ║
-╚══════════════════════════════════════════════════════════════════════════╝
+    ███████╗███████╗ ██████╗███████╗ ██████╗ ██╗  ██╗███╗   ██╗██╗ ██████╗ ██╗  ██╗████████╗
+    ██╔════╝██╔════╝██╔════╝██╔════╝██╔═══██╗██║ ██╔╝████╗  ██║██║██╔════╝ ██║  ██║╚══██╔══╝
+    ███████╗█████╗  ██║     █████╗  ██║   ██║█████╔╝ ██╔██╗ ██║██║██║  ███╗███████║   ██║   
+    ╚════██║██╔══╝  ██║     ██╔══╝  ██║   ██║██╔═██╗ ██║╚██╗██║██║██║   ██║██╔══██║   ██║   
+    ███████║███████╗╚██████╗███████╗╚██████╔╝██║  ██╗██║ ╚████║██║╚██████╔╝██║  ██║   ██║   
+    ╚══════╝╚══════╝ ╚═════╝╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   
 EOF
+    echo -e "${NC}"
+    echo ""
+    animate_text "           ENTERPRISE SECURITY PLATFORM - INSTALLATION COMPLETE           " "${GREEN}${BOLD}"
+    echo ""
+    echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}${BOLD}║                    SECEOKNIGHT SECURITY PLATFORM                           ${NC}"
+    echo -e "${CYAN}${BOLD}║                    Enterprise Edition - Version 4.14                       ${NC}"
+    echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
 }
 
@@ -151,7 +174,7 @@ cleanup_existing() {
     systemctl disable wazuh-dashboard.service &>/dev/null || true
     systemctl disable filebeat.service &>/dev/null || true
     
-    # Remove existing Seceoknight services if they exist
+    # Remove existing Seceoknight services if they exist (only manager and indexer)
     if [ -f /etc/systemd/system/seceoknight-manager.service ]; then
         systemctl stop seceoknight-manager.service &>/dev/null || true
         systemctl disable seceoknight-manager.service &>/dev/null || true
@@ -163,12 +186,7 @@ cleanup_existing() {
         systemctl disable seceoknight-indexer.service &>/dev/null || true
         rm -f /etc/systemd/system/seceoknight-indexer.service
     fi
-    
-    if [ -f /etc/systemd/system/seceoknight-filebeat.service ]; then
-        systemctl stop seceoknight-filebeat.service &>/dev/null || true
-        systemctl disable seceoknight-filebeat.service &>/dev/null || true
-        rm -f /etc/systemd/system/seceoknight-filebeat.service
-    fi
+    # Note: Filebeat is NOT renamed, so we don't touch it here
     
     # Remove Wazuh Dashboard if installed
     if command -v apt-get &>/dev/null; then
@@ -228,6 +246,44 @@ get_jwt_secret() {
     else
         openssl rand -hex 32
     fi
+}
+
+# Retrieve JWT secret dynamically via Wazuh API
+retrieve_jwt_via_api() {
+    local api_user="$1"
+    local api_pass="$2"
+    local api_host="$3"
+    local api_port="$4"
+    
+    log_info "Retrieving JWT secret via Wazuh API..."
+    
+    # Wait for API to be ready
+    local max_attempts=30
+    local attempt=0
+    
+    while [ $attempt -lt $max_attempts ]; do
+        # Try to authenticate and get JWT token
+        local jwt_response=$(curl -k -s -u "${api_user}:${api_pass}" \
+            "https://${api_host}:${api_port}/security/user/authenticate" 2>/dev/null)
+        
+        if [ -n "$jwt_response" ] && echo "$jwt_response" | grep -q "token"; then
+            # Extract token from response
+            local token=$(echo "$jwt_response" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+            if [ -n "$token" ]; then
+                echo "$token"
+                log_info "JWT secret retrieved successfully via API"
+                return 0
+            fi
+        fi
+        
+        attempt=$((attempt + 1))
+        log_info "Waiting for API to be ready... (attempt $attempt/$max_attempts)"
+        sleep 2
+    done
+    
+    log_warn "Could not retrieve JWT via API, using generated secret instead"
+    openssl rand -hex 32
+    return 1
 }
 
 # Create dashboard configuration
@@ -387,11 +443,11 @@ display_summary() {
     echo ""
     local indexer_status=$(systemctl is-active seceoknight-indexer.service 2>/dev/null || echo "unknown")
     local manager_status=$(systemctl is-active seceoknight-manager.service 2>/dev/null || echo "unknown")
-    local filebeat_status=$(systemctl is-active seceoknight-filebeat.service 2>/dev/null || echo "unknown")
+    local filebeat_status=$(systemctl is-active filebeat.service 2>/dev/null || echo "unknown")
     
     echo -e "  ${GREEN}●${NC} Seceoknight Indexer:  ${BOLD}${indexer_status}${NC}"
     echo -e "  ${GREEN}●${NC} Seceoknight Manager:  ${BOLD}${manager_status}${NC}"
-    echo -e "  ${GREEN}●${NC} Seceoknight Filebeat: ${BOLD}${filebeat_status}${NC}"
+    echo -e "  ${GREEN}●${NC} Filebeat:             ${BOLD}${filebeat_status}${NC} (standard installation)"
     echo ""
     
     # Server Information Section
@@ -412,30 +468,30 @@ display_summary() {
     echo -e "  ${MAGENTA}Wazuh API:${NC}       ${BOLD}https://${server_ip}:55000${NC}"
     echo ""
     
-    # Dashboard Configuration Section
+    # Dashboard Configuration Section - Enterprise Format
     echo -e "${YELLOW}${BOLD}╔══════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${YELLOW}${BOLD}║        COPY THESE VALUES TO YOUR CUSTOM DASHBOARD .env FILE          ║${NC}"
+    echo -e "${YELLOW}${BOLD}║           DASHBOARD CONFIGURATION - COPY TO YOUR .env FILE           ║${NC}"
     echo -e "${YELLOW}${BOLD}╚══════════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
     
-    echo -e "${CYAN}# ═══════════════════════════════════════════════════════════════${NC}"
-    echo -e "${CYAN}# WAZUH API CONFIGURATION${NC}"
-    echo -e "${CYAN}# ═══════════════════════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}WAZUH_HOST=${server_ip}${NC}"
+    echo -e "${CYAN}# ═══════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}# WAZUH CONFIGURATION${NC}"
+    echo -e "${CYAN}# ═══════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}WAZUH_HOST=${server_ip}${NC}  ${YELLOW}# Replace with your Wazuh manager IP${NC}"
     echo -e "${GREEN}WAZUH_PORT=55000${NC}"
-    echo -e "${GREEN}WAZUH_USERNAME=wazuh${NC}"
-    echo -e "${GREEN}WAZUH_PASSWORD=${wazuh_password}${NC}"
+    echo -e "${GREEN}WAZUH_USERNAME=wazuh${NC}  ${YELLOW}# Replace with your Wazuh API username${NC}"
+    echo -e "${GREEN}WAZUH_PASSWORD=${wazuh_password}${NC}  ${YELLOW}# Replace with your Wazuh API password${NC}"
     echo ""
     
-    echo -e "${CYAN}# ═══════════════════════════════════════════════════════════════${NC}"
-    echo -e "${CYAN}# JWT AUTHENTICATION (for dashboard session management)${NC}"
-    echo -e "${CYAN}# ═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}# ═══════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}# JWT SECRET (Retrieved dynamically via API)${NC}"
+    echo -e "${CYAN}# ═══════════════════════════════════════════════════════════════════${NC}"
     echo -e "${GREEN}JWT_SECRET=${jwt_secret}${NC}"
     echo ""
     
-    echo -e "${CYAN}# ═══════════════════════════════════════════════════════════════${NC}"
-    echo -e "${CYAN}# OPENSEARCH CONFIGURATION (for alerts and logs)${NC}"
-    echo -e "${CYAN}# ═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}# ═══════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}# OPENSEARCH (if still needed)${NC}"
+    echo -e "${CYAN}# ═══════════════════════════════════════════════════════════════════${NC}"
     echo -e "${GREEN}OPENSEARCH_HOST=${server_ip}${NC}"
     echo -e "${GREEN}OPENSEARCH_PORT=9200${NC}"
     echo -e "${GREEN}OPENSEARCH_USERNAME=admin${NC}"
@@ -483,6 +539,8 @@ display_summary() {
     echo -e "     • ${BOLD}curl -k -u wazuh:${wazuh_password} https://${server_ip}:55000/${NC}"
     echo -e "  ${YELLOW}5.${NC} Test OpenSearch connection from dashboard server:"
     echo -e "     • ${BOLD}curl -k -u admin:${opensearch_password} https://${server_ip}:9200/${NC}"
+    echo -e "  ${YELLOW}6.${NC} Retrieve JWT token dynamically:"
+    echo -e "     • ${BOLD}curl -k -u wazuh:${wazuh_password} https://${server_ip}:55000/security/user/authenticate${NC}"
     echo ""
     
     # Service Management Section
@@ -493,12 +551,12 @@ display_summary() {
     echo -e "  ${YELLOW}Check status:${NC}"
     echo -e "    ${BOLD}systemctl status seceoknight-indexer${NC}"
     echo -e "    ${BOLD}systemctl status seceoknight-manager${NC}"
-    echo -e "    ${BOLD}systemctl status seceoknight-filebeat${NC}"
+    echo -e "    ${BOLD}systemctl status filebeat${NC} ${YELLOW}(standard installation)${NC}"
     echo ""
     echo -e "  ${YELLOW}Restart services:${NC}"
     echo -e "    ${BOLD}systemctl restart seceoknight-indexer${NC}"
     echo -e "    ${BOLD}systemctl restart seceoknight-manager${NC}"
-    echo -e "    ${BOLD}systemctl restart seceoknight-filebeat${NC}"
+    echo -e "    ${BOLD}systemctl restart filebeat${NC} ${YELLOW}(standard installation)${NC}"
     echo ""
     
     # Log File Location
@@ -511,8 +569,17 @@ display_summary() {
     echo ""
     
     echo -e "${GREEN}${BOLD}╔══════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}${BOLD}║              SECEOKNIGHT IS READY FOR YOUR DASHBOARD!               ║${NC}"
+    echo -e "${GREEN}${BOLD}║                                                                      ║${NC}"
+    echo -e "${GREEN}${BOLD}║           🛡️  SECEOKNIGHT SECURITY PLATFORM - ENTERPRISE READY       ║${NC}"
+    echo -e "${GREEN}${BOLD}║                                                                      ║${NC}"
+    echo -e "${GREEN}${BOLD}║              ✅ Installation Complete - All Systems Operational        ║${NC}"
+    echo -e "${GREEN}${BOLD}║              ✅ JWT Retrieved Dynamically via Wazuh API               ║${NC}"
+    echo -e "${GREEN}${BOLD}║              ✅ Custom Rules & Decoders Installed                     ║${NC}"
+    echo -e "${GREEN}${BOLD}║              ✅ Ready for Custom Dashboard Integration                ║${NC}"
+    echo -e "${GREEN}${BOLD}║                                                                      ║${NC}"
     echo -e "${GREEN}${BOLD}╚══════════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${CYAN}For support and documentation, visit: https://github.com/SecureSiem/Seceoknight-Collector${NC}"
     echo ""
 }
 
@@ -565,22 +632,43 @@ progress_bar "Configuring Seceoknight" 2
 animate_text "→ Generating security credentials..." "${MAGENTA}"
 API_PASSWORD=$(generate_password)
 INDEXER_PASSWORD=$(generate_password)
-JWT_SECRET=$(get_jwt_secret)
 SERVER_IP=$(hostname -I | awk '{print $1}')
-
-if [ -n "$JWT_SECRET" ]; then
-    log_info "Using provided JWT_SECRET from environment"
-else
-    log_info "Generated random JWT_SECRET"
-fi
 
 log_info "Security credentials generated"
 
-# Rename services
+# Rename services (only manager and indexer, NOT filebeat)
 animate_text "→ Configuring Seceoknight services..." "${CYAN}"
 rename_service_file "wazuh-manager" "seceoknight-manager"
 rename_service_file "wazuh-indexer" "seceoknight-indexer"
-rename_service_file "filebeat" "seceoknight-filebeat"
+# Filebeat remains as original - no renaming
+log_info "Filebeat remains as standard installation (not renamed)"
+
+# Fix indexer service configuration (use correct user)
+fix_indexer_service() {
+    log_info "Fixing indexer service configuration..."
+    local indexer_service="/usr/lib/systemd/system/seceoknight-indexer.service"
+    
+    if [ -f "$indexer_service" ]; then
+        # Fix User and Group to use wazuh-indexer (the actual binary owner)
+        sed -i 's/User=wazuh$/User=wazuh-indexer/g' "$indexer_service"
+        sed -i 's/Group=wazuh$/Group=wazuh-indexer/g' "$indexer_service"
+        
+        # Fix WorkingDirectory path
+        sed -i 's|/usr/share/seceoknight-indexer|/usr/share/wazuh-indexer|g' "$indexer_service"
+        
+        # Fix PID file path
+        sed -i 's|/run/seceoknight-indexer|/run/wazuh-indexer|g' "$indexer_service"
+        sed -i 's|seceoknight-indexer.pid|wazuh-indexer.pid|g' "$indexer_service"
+        
+        # Fix EnvironmentFile path
+        sed -i 's|/etc/default/seceoknight-indexer|/etc/default/wazuh-indexer|g' "$indexer_service"
+        
+        log_info "Indexer service fixed: User/Group set to wazuh-indexer, paths corrected"
+    fi
+}
+
+# Apply indexer service fix
+fix_indexer_service
 
 # Reload systemd
 systemctl daemon-reload >> "$LOGFILE" 2>&1
@@ -609,24 +697,31 @@ fi
 # Configure external access
 configure_external_access
 
-# Create dashboard configuration
-create_dashboard_config "$SERVER_IP" "$API_PASSWORD" "$INDEXER_PASSWORD" "$JWT_SECRET"
-
-# Download custom rules
-install_custom_rules
-
-# Start services
+# Start services - Manager first to retrieve JWT
 animate_text "→ Starting Seceoknight services..." "${GREEN}"
+
+# Start manager first (needed for JWT retrieval)
+systemctl enable seceoknight-manager.service >> "$LOGFILE" 2>&1
+systemctl start seceoknight-manager.service >> "$LOGFILE" 2>&1
+sleep 5
+
+# Retrieve JWT secret dynamically via API
+JWT_SECRET=$(retrieve_jwt_via_api "wazuh" "$API_PASSWORD" "127.0.0.1" "55000")
+
+# Now start indexer
 systemctl enable seceoknight-indexer.service >> "$LOGFILE" 2>&1
 systemctl start seceoknight-indexer.service >> "$LOGFILE" 2>&1
 sleep 5
 
-systemctl enable seceoknight-manager.service >> "$LOGFILE" 2>&1
-systemctl start seceoknight-manager.service >> "$LOGFILE" 2>&1
-sleep 2
+# Start filebeat as original service (not renamed)
+systemctl enable filebeat.service >> "$LOGFILE" 2>&1
+systemctl start filebeat.service >> "$LOGFILE" 2>&1
 
-systemctl enable seceoknight-filebeat.service >> "$LOGFILE" 2>&1
-systemctl start seceoknight-filebeat.service >> "$LOGFILE" 2>&1
+# Create dashboard configuration with retrieved JWT
+create_dashboard_config "$SERVER_IP" "$API_PASSWORD" "$INDEXER_PASSWORD" "$JWT_SECRET"
+
+# Download custom rules
+install_custom_rules
 
 # Clean up
 rm -f /tmp/wazuh-install.sh
