@@ -209,6 +209,8 @@ cleanup_existing() {
 }
 
 # Rename service file function
+# IMPORTANT: Only rename the file, DO NOT modify contents
+# The service file contents must keep original wazuh user and paths
 rename_service_file() {
     local old_name="$1"
     local new_name="$2"
@@ -224,11 +226,10 @@ rename_service_file() {
     fi
     
     if [ -n "$service_file" ]; then
-        # Read the content and replace
+        # Just rename the file - DO NOT modify contents
         local new_file="${service_file/\/$old_name\./\/$new_name.}"
-        sed -i "s/${old_name}/${new_name}/g" "$service_file"
         mv "$service_file" "$new_file"
-        log_info "Renamed service: ${old_name} → ${new_name}"
+        log_info "Renamed service file: ${old_name} → ${new_name} (contents unchanged)"
     fi
 }
 
@@ -685,52 +686,10 @@ rename_service_file "wazuh-indexer" "seceoknight-indexer"
 # Filebeat remains as original - no renaming
 log_info "Filebeat remains as standard installation (not renamed)"
 
-# Fix indexer service configuration (fix paths only, keep original user)
-fix_indexer_service() {
-    log_info "Fixing indexer service configuration..."
-    
-    # Find the indexer service file (could be in different locations)
-    local indexer_service=""
-    for path in "/usr/lib/systemd/system/seceoknight-indexer.service" "/etc/systemd/system/seceoknight-indexer.service" "/lib/systemd/system/seceoknight-indexer.service"; do
-        if [ -f "$path" ]; then
-            indexer_service="$path"
-            break
-        fi
-    done
-    
-    if [ -n "$indexer_service" ]; then
-        log_info "Found indexer service at: $indexer_service"
-        
-        # NOTE: Do NOT change User/Group - keep original wazuh user
-        # The service should run as wazuh user (uid=110), not wazuh-indexer
-        
-        # Fix WorkingDirectory path
-        sed -i 's|/usr/share/seceoknight-indexer|/usr/share/wazuh-indexer|g' "$indexer_service"
-        
-        # Fix PID file path
-        sed -i 's|/run/seceoknight-indexer|/run/wazuh-indexer|g' "$indexer_service"
-        sed -i 's|seceoknight-indexer.pid|wazuh-indexer.pid|g' "$indexer_service"
-        
-        # Fix EnvironmentFile path
-        sed -i 's|/etc/default/seceoknight-indexer|/etc/default/wazuh-indexer|g' "$indexer_service"
-        
-        # Fix any remaining seceoknight-indexer references in paths
-        sed -i 's|/var/lib/seceoknight-indexer|/var/lib/wazuh-indexer|g' "$indexer_service"
-        sed -i 's|/var/log/seceoknight-indexer|/var/log/wazuh-indexer|g' "$indexer_service"
-        sed -i 's|/etc/seceoknight-indexer|/etc/wazuh-indexer|g' "$indexer_service"
-        
-        log_info "Indexer service paths fixed (User/Group kept as original wazuh)"
-        
-        # Show the current User/Group settings
-        log_info "Service file User/Group settings:"
-        grep -E "^(User|Group)=" "$indexer_service" | tee -a "$LOGFILE" || true
-    else
-        log_warn "Could not find seceoknight-indexer.service file"
-    fi
-}
-
-# Apply indexer service fix
-fix_indexer_service
+# NOTE: Service files are renamed by rename_service_file() function
+# We do NOT modify the contents of service files - they keep original wazuh user/paths
+# The service will run as 'wazuh' user with original wazuh-indexer paths
+log_info "Service files renamed - keeping original wazuh user and path configuration"
 
 # Reload systemd
 systemctl daemon-reload >> "$LOGFILE" 2>&1
