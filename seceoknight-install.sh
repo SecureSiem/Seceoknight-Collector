@@ -22,8 +22,8 @@ REPO_NAME="${REPO_NAME:-Seceoknight-Collector}"
 BRANCH="${BRANCH:-main}"
 
 # Wazuh version
-readonly WAZUH_VERSION="4.11.2"
-readonly WAZUH_INSTALLER_URL="https://packages.wazuh.com/${WAZUH_VERSION%.*}/wazuh-install.sh"
+readonly WAZUH_VERSION="4.14"
+readonly WAZUH_INSTALLER_URL="https://packages.wazuh.com/4.14/wazuh-install.sh"
 
 # Seceoknight branding
 readonly SECEOKNIGHT_NAME="seceoknight"
