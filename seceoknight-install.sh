@@ -265,6 +265,7 @@ retrieve_jwt_via_api() {
     
     while [ $attempt -lt $max_attempts ]; do
         # Try to authenticate and get JWT token (use raw=true for token-only response)
+        # Note: Wazuh API uses GET for authentication, not POST
         local jwt_response=$(curl -k -s -u "${api_user}:${api_pass}" \
             "https://${api_host}:${api_port}/security/user/authenticate?raw=true" 2>/dev/null)
         
@@ -809,13 +810,35 @@ JWT_SECRET=$(retrieve_jwt_via_api "wazuh" "$API_PASSWORD" "127.0.0.1" "55000")
 # If JWT retrieval failed, try to get the actual configured password from keystore
 if [ -z "$JWT_SECRET" ] || [ ${#JWT_SECRET} -lt 20 ]; then
     log_warn "JWT retrieval with new password failed, checking keystore..."
+    
     # Try to read the actual password from keystore
     local actual_password=$(/var/ossec/bin/wazuh-keystore -f api -k password 2>/dev/null | grep -v "INFO" | head -1)
+    log_info "Keystore returned password: ${actual_password:0:5}... (first 5 chars)"
+    
     if [ -n "$actual_password" ] && [ "$actual_password" != "$API_PASSWORD" ]; then
-        log_info "Found different password in keystore, retrying with that..."
+        log_info "Found different password in keystore than expected, retrying with that..."
         JWT_SECRET=$(retrieve_jwt_via_api "wazuh" "$actual_password" "127.0.0.1" "55000")
         # Update the password variable for dashboard config
         API_PASSWORD="$actual_password"
+    else
+        log_warn "Keystore password matches expected or is empty, trying default credentials..."
+        # Try default Wazuh credentials
+        JWT_SECRET=$(retrieve_jwt_via_api "wazuh" "wazuh" "127.0.0.1" "55000")
+        if [ -n "$JWT_SECRET" ] && [ ${#JWT_SECRET} -gt 20 ]; then
+            API_PASSWORD="wazuh"
+            log_info "Default credentials worked!"
+        fi
+    fi
+fi
+
+# If still no JWT, try wazuh-wui user which is sometimes the default
+if [ -z "$JWT_SECRET" ] || [ ${#JWT_SECRET} -lt 20 ]; then
+    log_warn "Trying wazuh-wui user with default password..."
+    JWT_SECRET=$(retrieve_jwt_via_api "wazuh-wui" "wazuh-wui" "127.0.0.1" "55000")
+    if [ -n "$JWT_SECRET" ] && [ ${#JWT_SECRET} -gt 20 ]; then
+        # Update dashboard config with working credentials
+        API_PASSWORD="wazuh-wui"
+        log_info "wazuh-wui credentials worked!"
     fi
 fi
 
