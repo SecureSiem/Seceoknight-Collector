@@ -673,11 +673,7 @@ fix_indexer_service
 # Reload systemd
 systemctl daemon-reload >> "$LOGFILE" 2>&1
 
-# Update API and indexer passwords
-log_info "Configuring API credentials..."
-/var/ossec/bin/wazuh-keystore -f api -k username -v "wazuh" >> "$LOGFILE" 2>&1
-/var/ossec/bin/wazuh-keystore -f api -k password -v "$API_PASSWORD" >> "$LOGFILE" 2>&1
-
+# Note: API credentials will be set after manager starts (see below)
 # Update indexer password in OpenSearch
 if [ -f /etc/wazuh-indexer/opensearch-security/internal_users.yml ]; then
     HASH=$(/usr/share/wazuh-indexer/plugins/opensearch-security/tools/hash.sh -p "$INDEXER_PASSWORD" 2>/dev/null | tail -1)
@@ -700,12 +696,22 @@ configure_external_access
 # Start services - Manager first to retrieve JWT
 animate_text "→ Starting Seceoknight services..." "${GREEN}"
 
-# Start manager first (needed for JWT retrieval)
+# Start manager first with default credentials
 systemctl enable seceoknight-manager.service >> "$LOGFILE" 2>&1
 systemctl start seceoknight-manager.service >> "$LOGFILE" 2>&1
 sleep 5
 
-# Retrieve JWT secret dynamically via API
+# Update API credentials (must restart manager to apply)
+log_info "Updating API credentials..."
+/var/ossec/bin/wazuh-keystore -f api -k username -v "wazuh" >> "$LOGFILE" 2>&1
+/var/ossec/bin/wazuh-keystore -f api -k password -v "$API_PASSWORD" >> "$LOGFILE" 2>&1
+log_info "API credentials updated, restarting manager to apply changes..."
+
+# Restart manager to apply new API credentials
+systemctl restart seceoknight-manager.service >> "$LOGFILE" 2>&1
+sleep 5
+
+# Retrieve JWT secret dynamically via API with NEW password
 JWT_SECRET=$(retrieve_jwt_via_api "wazuh" "$API_PASSWORD" "127.0.0.1" "55000")
 
 # Now start indexer
