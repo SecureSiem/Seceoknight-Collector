@@ -249,13 +249,15 @@ get_jwt_secret() {
 }
 
 # Retrieve JWT secret dynamically via Wazuh API
+# NOTE: This function outputs ONLY the token to stdout (for capture), logs go to stderr
 retrieve_jwt_via_api() {
     local api_user="$1"
     local api_pass="$2"
     local api_host="$3"
     local api_port="$4"
     
-    log_info "Retrieving JWT secret via Wazuh API..."
+    # Log to stderr so it doesn't get captured in variable assignment
+    echo "[INFO] Retrieving JWT secret via Wazuh API..." >&2
     
     # Wait for API to be ready
     local max_attempts=30
@@ -266,22 +268,30 @@ retrieve_jwt_via_api() {
         local jwt_response=$(curl -k -s -u "${api_user}:${api_pass}" \
             "https://${api_host}:${api_port}/security/user/authenticate" 2>/dev/null)
         
-        if [ -n "$jwt_response" ] && echo "$jwt_response" | grep -q "token"; then
+        if [ -n "$jwt_response" ] && echo "$jwt_response" | grep -q '"token"'; then
             # Extract token from response
             local token=$(echo "$jwt_response" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
             if [ -n "$token" ]; then
+                # Output ONLY the token to stdout
                 echo "$token"
-                log_info "JWT secret retrieved successfully via API"
+                echo "[INFO] JWT secret retrieved successfully via API" >&2
                 return 0
             fi
         fi
         
+        # Check if we got an error response
+        if [ -n "$jwt_response" ] && echo "$jwt_response" | grep -q '"error"'; then
+            local error_msg=$(echo "$jwt_response" | grep -o '"detail":"[^"]*"' | cut -d'"' -f4)
+            echo "[WARN] API error: $error_msg" >&2
+        fi
+        
         attempt=$((attempt + 1))
-        log_info "Waiting for API to be ready... (attempt $attempt/$max_attempts)"
+        echo "[INFO] Waiting for API to be ready... (attempt $attempt/$max_attempts)" >&2
         sleep 2
     done
     
-    log_warn "Could not retrieve JWT via API, using generated secret instead"
+    echo "[WARN] Could not retrieve JWT via API, using generated secret instead" >&2
+    # Output fallback token to stdout
     openssl rand -hex 32
     return 1
 }
@@ -441,13 +451,45 @@ display_summary() {
     echo -e "${CYAN}${BOLD}│  SERVICES STATUS                                                    │${NC}"
     echo -e "${CYAN}${BOLD}└─────────────────────────────────────────────────────────────────────┘${NC}"
     echo ""
-    local indexer_status=$(systemctl is-active seceoknight-indexer.service 2>/dev/null || echo "unknown")
-    local manager_status=$(systemctl is-active seceoknight-manager.service 2>/dev/null || echo "unknown")
-    local filebeat_status=$(systemctl is-active filebeat.service 2>/dev/null || echo "unknown")
     
-    echo -e "  ${GREEN}●${NC} Seceoknight Indexer:  ${BOLD}${indexer_status}${NC}"
-    echo -e "  ${GREEN}●${NC} Seceoknight Manager:  ${BOLD}${manager_status}${NC}"
-    echo -e "  ${GREEN}●${NC} Filebeat:             ${BOLD}${filebeat_status}${NC} (standard installation)"
+    # Wait a moment for services to stabilize before checking status
+    sleep 2
+    
+    # Get service status with better error handling
+    local indexer_status=$(systemctl is-active seceoknight-indexer.service 2>/dev/null)
+    if [ -z "$indexer_status" ]; then
+        indexer_status="unknown"
+    fi
+    
+    local manager_status=$(systemctl is-active seceoknight-manager.service 2>/dev/null)
+    if [ -z "$manager_status" ]; then
+        manager_status="unknown"
+    fi
+    
+    local filebeat_status=$(systemctl is-active filebeat.service 2>/dev/null)
+    if [ -z "$filebeat_status" ]; then
+        filebeat_status="unknown"
+    fi
+    
+    # Color code the status
+    local indexer_color="${GREEN}"
+    if [ "$indexer_status" != "active" ]; then
+        indexer_color="${RED}"
+    fi
+    
+    local manager_color="${GREEN}"
+    if [ "$manager_status" != "active" ]; then
+        manager_color="${RED}"
+    fi
+    
+    local filebeat_color="${GREEN}"
+    if [ "$filebeat_status" != "active" ]; then
+        filebeat_color="${RED}"
+    fi
+    
+    echo -e "  ${indexer_color}●${NC} Seceoknight Indexer:  ${BOLD}${indexer_status}${NC}"
+    echo -e "  ${manager_color}●${NC} Seceoknight Manager:  ${BOLD}${manager_status}${NC}"
+    echo -e "  ${filebeat_color}●${NC} Filebeat:             ${BOLD}${filebeat_status}${NC} (standard installation)"
     echo ""
     
     # Server Information Section
