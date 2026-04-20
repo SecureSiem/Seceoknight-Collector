@@ -264,25 +264,24 @@ retrieve_jwt_via_api() {
     local attempt=0
     
     while [ $attempt -lt $max_attempts ]; do
-        # Try to authenticate and get JWT token
+        # Try to authenticate and get JWT token (use raw=true for token-only response)
         local jwt_response=$(curl -k -s -u "${api_user}:${api_pass}" \
-            "https://${api_host}:${api_port}/security/user/authenticate" 2>/dev/null)
+            "https://${api_host}:${api_port}/security/user/authenticate?raw=true" 2>/dev/null)
         
-        if [ -n "$jwt_response" ] && echo "$jwt_response" | grep -q '"token"'; then
-            # Extract token from response
-            local token=$(echo "$jwt_response" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
-            if [ -n "$token" ]; then
-                # Output ONLY the token to stdout
-                echo "$token"
-                echo "[INFO] JWT secret retrieved successfully via API" >&2
-                return 0
-            fi
+        # Check if we got a valid token (raw=true returns just the token string)
+        if [ -n "$jwt_response" ] && [ ${#jwt_response} -gt 20 ] && ! echo "$jwt_response" | grep -q '"error"'; then
+            # With raw=true, the response is just the token string
+            echo "$jwt_response"
+            echo "[INFO] JWT secret retrieved successfully via API" >&2
+            return 0
         fi
         
-        # Check if we got an error response
+        # Check if we got an error response (JSON format)
         if [ -n "$jwt_response" ] && echo "$jwt_response" | grep -q '"error"'; then
             local error_msg=$(echo "$jwt_response" | grep -o '"detail":"[^"]*"' | cut -d'"' -f4)
             echo "[WARN] API error: $error_msg" >&2
+        elif [ -n "$jwt_response" ]; then
+            echo "[WARN] Unexpected API response: ${jwt_response:0:100}" >&2
         fi
         
         attempt=$((attempt + 1))
