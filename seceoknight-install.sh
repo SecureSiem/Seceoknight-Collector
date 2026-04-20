@@ -743,16 +743,47 @@ if [ "$api_ready" = false ]; then
     log_warn "API did not become ready in expected time, will try anyway"
 fi
 
-# FIRST: Try wazuh-wui:wazuh-wui (confirmed working on standard Wazuh installations)
-log_info "Attempting JWT retrieval with wazuh-wui:wazuh-wui credentials..."
-JWT_SECRET=$(retrieve_jwt_via_api "wazuh-wui" "wazuh-wui" "127.0.0.1" "55000")
+# Check if Wazuh installer generated a password file
+WAZUH_PASSWORD_FILE="/tmp/wazuh-install-files.tar"
+WAZUH_API_USER="wazuh"
+WAZUH_API_PASS=""
 
-# If wazuh-wui credentials worked, use them
-if [ -n "$JWT_SECRET" ] && [ ${#JWT_SECRET} -gt 20 ]; then
-    API_PASSWORD="wazuh-wui"
-    log_info "wazuh-wui:wazuh-wui credentials worked! Using these for dashboard config."
-else
-    # wazuh-wui failed, try wazuh:wazuh as fallback
+if [ -f "$WAZUH_PASSWORD_FILE" ]; then
+    log_info "Found Wazuh installer files, extracting API credentials..."
+    # Extract the password file from the tar archive
+    tar -xf "$WAZUH_PASSWORD_FILE" -C /tmp/ wazuh-install-files/wazuh-passwords.txt 2>/dev/null || true
+    if [ -f "/tmp/wazuh-install-files/wazuh-passwords.txt" ]; then
+        # Read the API password from the file
+        WAZUH_API_PASS=$(grep "wazuh:" /tmp/wazuh-install-files/wazuh-passwords.txt | head -1 | cut -d':' -f2- | tr -d ' ')
+        if [ -n "$WAZUH_API_PASS" ]; then
+            log_info "Found API password in Wazuh installer files"
+        fi
+    fi
+fi
+
+# FIRST: Try to use the password from Wazuh installer files if available
+if [ -n "$WAZUH_API_PASS" ]; then
+    log_info "Attempting JWT retrieval with Wazuh installer credentials (wazuh:$WAZUH_API_PASS)..."
+    JWT_SECRET=$(retrieve_jwt_via_api "$WAZUH_API_USER" "$WAZUH_API_PASS" "127.0.0.1" "55000")
+    if [ -n "$JWT_SECRET" ] && [ ${#JWT_SECRET} -gt 20 ]; then
+        API_PASSWORD="$WAZUH_API_PASS"
+        log_info "Wazuh installer credentials worked! Using these for dashboard config."
+    fi
+fi
+
+# If installer credentials didn't work, try wazuh-wui:wazuh-wui
+if [ -z "$JWT_SECRET" ] || [ ${#JWT_SECRET} -lt 20 ]; then
+    log_info "Attempting JWT retrieval with wazuh-wui:wazuh-wui credentials..."
+    JWT_SECRET=$(retrieve_jwt_via_api "wazuh-wui" "wazuh-wui" "127.0.0.1" "55000")
+    if [ -n "$JWT_SECRET" ] && [ ${#JWT_SECRET} -gt 20 ]; then
+        API_PASSWORD="wazuh-wui"
+        log_info "wazuh-wui:wazuh-wui credentials worked! Using these for dashboard config."
+    fi
+fi
+
+# If wazuh-wui credentials didn't work, try wazuh:wazuh as fallback
+if [ -z "$JWT_SECRET" ] || [ ${#JWT_SECRET} -lt 20 ]; then
+    log_info "wazuh-wui failed, trying wazuh:wazuh as fallback..."
     log_warn "wazuh-wui credentials failed, trying wazuh:wazuh..."
     JWT_SECRET=$(retrieve_jwt_via_api "wazuh" "wazuh" "127.0.0.1" "55000")
     
