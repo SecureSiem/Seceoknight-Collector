@@ -764,16 +764,60 @@ sleep 5
 
 # Update API credentials (must restart manager to apply)
 log_info "Updating API credentials..."
-/var/ossec/bin/wazuh-keystore -f api -k username -v "wazuh" >> "$LOGFILE" 2>&1
-/var/ossec/bin/wazuh-keystore -f api -k password -v "$API_PASSWORD" >> "$LOGFILE" 2>&1
+if /var/ossec/bin/wazuh-keystore -f api -k username -v "wazuh" >> "$LOGFILE" 2>&1; then
+    log_info "API username set successfully"
+else
+    log_warn "Failed to set API username, continuing with default"
+fi
+
+if /var/ossec/bin/wazuh-keystore -f api -k password -v "$API_PASSWORD" >> "$LOGFILE" 2>&1; then
+    log_info "API password set successfully"
+else
+    log_warn "Failed to set API password, continuing with default"
+fi
+
 log_info "API credentials updated, restarting manager to apply changes..."
 
 # Restart manager to apply new API credentials
 systemctl restart seceoknight-manager.service >> "$LOGFILE" 2>&1
-sleep 5
+
+# Wait longer for manager to fully start and API to be ready
+log_info "Waiting for manager API to be ready..."
+sleep 10
+
+# Test if API is responding before trying to authenticate
+local api_ready=false
+local api_check_attempts=0
+while [ $api_check_attempts -lt 10 ]; do
+    if curl -k -s "https://127.0.0.1:55000/" > /dev/null 2>&1; then
+        api_ready=true
+        log_info "API is responding"
+        break
+    fi
+    api_check_attempts=$((api_check_attempts + 1))
+    log_info "API not ready yet, waiting... (attempt $api_check_attempts/10)"
+    sleep 3
+done
+
+if [ "$api_ready" = false ]; then
+    log_warn "API did not become ready in expected time, will try anyway"
+fi
 
 # Retrieve JWT secret dynamically via API with NEW password
 JWT_SECRET=$(retrieve_jwt_via_api "wazuh" "$API_PASSWORD" "127.0.0.1" "55000")
+
+# If JWT retrieval failed, try to get the actual configured password from keystore
+if [ -z "$JWT_SECRET" ] || [ ${#JWT_SECRET} -lt 20 ]; then
+    log_warn "JWT retrieval with new password failed, checking keystore..."
+    # Try to read the actual password from keystore
+    local actual_password=$(/var/ossec/bin/wazuh-keystore -f api -k password 2>/dev/null | grep -v "INFO" | head -1)
+    if [ -n "$actual_password" ] && [ "$actual_password" != "$API_PASSWORD" ]; then
+        log_info "Found different password in keystore, retrying with that..."
+        JWT_SECRET=$(retrieve_jwt_via_api "wazuh" "$actual_password" "127.0.0.1" "55000")
+        # Update the password variable for dashboard config
+        API_PASSWORD="$actual_password"
+    fi
+fi
 
 # Now start indexer
 systemctl enable seceoknight-indexer.service >> "$LOGFILE" 2>&1
